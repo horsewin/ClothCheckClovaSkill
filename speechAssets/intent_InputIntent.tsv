@@ -1,0 +1,13 @@
+[INTENT SLOT]
+TempType	TEMP_TYPE
+
+[INTENT EXPRESSION]
+めっちゃ<TempType>さむい</TempType>
+すごく<TempType>あつかった</TempType>
+かなり<TempType>さむかった</TempType>
+じゃあ<TempType>ちょうどよかった</TempType>
+うーん<TempType>さむかった</TempType>
+<TempType>あつかった</TempType>わ
+<TempType>あつい</TempType>でした
+<TempType>さむかった</TempType>
+今日は<TempType>寒い</TempType>

@@ -1,0 +1,11 @@
+[INTENT SLOT]
+SerialSeven	POSTALCODE_TYPE
+SerialSix	POSTALCODE_TYPE
+SerialFive	POSTALCODE_TYPE
+SerialFour	POSTALCODE_TYPE
+SerialThree	POSTALCODE_TYPE
+SerialTwo	POSTALCODE_TYPE
+SerialOne	POSTALCODE_TYPE
+
+[INTENT EXPRESSION]
+<SerialOne>1</SerialOne><SerialTwo>0</SerialTwo><SerialThree>0</SerialThree><SerialFour>0</SerialFour><SerialFive>0</SerialFive><SerialSix>0</SerialSix><SerialSeven>4</SerialSeven>
