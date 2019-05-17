@@ -5,8 +5,8 @@ import axios, {AxiosRequestConfig} from 'axios';
 import {DocumentClient} from 'aws-sdk/clients/dynamodb';
 import * as line from '@line/bot-sdk';
 import * as Types from "@line/bot-sdk/lib/types";
-import {quickReply} from "./botResponse";
 import {TemplateContent} from "@line/bot-sdk/lib/types";
+import {quickReply} from "./botResponse";
 
 // ------------------------------------------------------
 // 変数・定数定義
@@ -21,7 +21,8 @@ const REGION = 'ap-northeast-1';
 
 // セッション状態
 const enum STATE {
-  ASK_POSTALCODE = 'postal',
+  ASK_POSTALCODE_FIRST = 'postal-first',
+  ASK_POSTALCODE_REST = 'postal-rest',
   ASK_TEMPERATURE = 'input',
 }
 
@@ -125,7 +126,7 @@ const launchRequestHandler = async (responseHelper: Clova.Context) => {
       Clova.SpeechBuilder.createSpeechText(MESSAGE.askPostalCode.reprompt),
     );
     responseHelper.setSessionAttributes({
-      STATE: STATE.ASK_POSTALCODE,
+      STATE: STATE.ASK_POSTALCODE_FIRST,
     });
 
   } else if (!postalCodeData.postalCode) {
@@ -137,7 +138,7 @@ const launchRequestHandler = async (responseHelper: Clova.Context) => {
       Clova.SpeechBuilder.createSpeechText(MESSAGE.askPostalCode.reprompt),
     );
     responseHelper.setSessionAttributes({
-      STATE: STATE.ASK_POSTALCODE,
+      STATE: STATE.ASK_POSTALCODE_FIRST,
     });
 
   } else {
@@ -354,15 +355,57 @@ const getTemperatureFromExternal = async (addressInfo: string): Promise<number> 
  * @param responseHelper
  */
 const inputPostalCode = async (responseHelper: Clova.Context) => {
-  let pCode = responseHelper.getSlots();
-  let postalCode = responseHelper.getSlot('CODE')! as string;
-
-  if (postalCode.length <= 8 && postalCode.match(/[0-9]{3}-[0-9]{4}|[0-9]{7}/)) {
-    if (!postalCode.match(/-/)) {
-      postalCode = `${postalCode.substr(0, 3)}-${postalCode.substr(3, 4)}`;
-    }
+  const pCode = responseHelper.getSlots();
+  console.log(pCode);
+  let postalCode = `${pCode.SerialOne}${pCode.SerialTwo}${pCode.SerialThree}`;
+  console.log(postalCode);
+  if (postalCode.length == 3 && postalCode.match(/[0-9]{3}/)) {
+    let speak = util.format(MESSAGE.askPostalCodeRest.speak,
+      pCode.SerialOne, pCode.SerialTwo, pCode.SerialThree);
+    responseHelper.setSimpleSpeech(
+      Clova.SpeechBuilder.createSpeechText(speak),
+    ).setReprompt(
+      Clova.SpeechBuilder.createSpeechText(MESSAGE.askPostalCode.reprompt),
+    );
+    responseHelper.setSessionAttributes({
+      STATE: STATE.ASK_POSTALCODE_REST,
+      postalCodeFirst: postalCode
+    });
+  } else {
+    responseHelper.setSimpleSpeech(
+      Clova.SpeechBuilder.createSpeechText(MESSAGE.askPostalCode.error),
+    ).setReprompt(
+      Clova.SpeechBuilder.createSpeechText(MESSAGE.askPostalCode.error),
+    );
+    responseHelper.setSessionAttributes({
+      STATE: STATE.ASK_POSTALCODE_FIRST,
+    });
   }
-  // TODO elseにおけるハンドリング
+};
+
+  /**
+ *
+ * @param responseHelper
+ */
+const inputPostalCodeRest = async (responseHelper: Clova.Context) => {
+  const pCode = responseHelper.getSlots();
+  let postalCode = `${pCode.SerialFour}${pCode.SerialFive}${pCode.SerialSix}${pCode.SerialSeven}`;
+  const sessionAttributes: any = responseHelper.getSessionAttributes();
+
+  if (postalCode.length == 4 && postalCode.match(/[0-9]{4}/)) {
+    postalCode = `${sessionAttributes.postalCodeFirst}-${postalCode}`;
+  } else {
+    responseHelper.setSimpleSpeech(
+      Clova.SpeechBuilder.createSpeechText(MESSAGE.askPostalCodeRest.error),
+    ).setReprompt(
+      Clova.SpeechBuilder.createSpeechText(MESSAGE.askPostalCodeRest.error),
+    );
+    responseHelper.setSessionAttributes({
+      STATE: STATE.ASK_POSTALCODE_REST,
+      postalCodeFirst: sessionAttributes.postalCodeFirst
+    });
+    return;
+  }
 
   const id = responseHelper.getUser().userId;
   const timestamp = new Date();
@@ -390,8 +433,11 @@ const inputPostalCode = async (responseHelper: Clova.Context) => {
     postalCode,
     today: temperature,
   });
+
+  const speak = util.format(MESSAGE.login.postalCode, postalCode)
+    + util.format(MESSAGE.login.speak, '');
   responseHelper.setSimpleSpeech(
-    Clova.SpeechBuilder.createSpeechText(util.format(MESSAGE.login.speak, '')),
+    Clova.SpeechBuilder.createSpeechText(speak),
   ).setReprompt(
     Clova.SpeechBuilder.createSpeechText(MESSAGE.login.reprompt),
   );
@@ -466,25 +512,69 @@ const clovaSkillHandler = Clova.Client
     const sessionAttributes: any = responseHelper.getSessionAttributes();
 
     switch (intent) {
-      case 'Clova.YesIntent':
-        // Build speechObject directly for response
-        responseHelper.setSimpleSpeech({
-          lang: 'ja',
-          type: 'PlainText',
-          value: 'はいはい',
-        });
-        break;
-      case 'Clova.NoIntent':
+      case 'Clova.CancelIntent':
         responseHelper.setSimpleSpeech(
-          Clova.SpeechBuilder.createSpeechText('いえいえ'),
-        );
+          Clova.SpeechBuilder.createSpeechText(MESSAGE.exit.speak),
+        ).endSession();
+        break;
+      case 'Clova.GuideIntent':
+        if (sessionAttributes.STATE === STATE.ASK_POSTALCODE_FIRST) {
+          responseHelper.setSimpleSpeech(
+            Clova.SpeechBuilder.createSpeechText(MESSAGE.help.askPostalCode),
+          ).setReprompt(
+            Clova.SpeechBuilder.createSpeechText(MESSAGE.askPostalCode.reprompt),
+          );
+        } else if (sessionAttributes.STATE === STATE.ASK_POSTALCODE_REST) {
+          responseHelper.setSimpleSpeech(
+            Clova.SpeechBuilder.createSpeechText(MESSAGE.help.askPostalCodeRest),
+          ).setReprompt(
+            Clova.SpeechBuilder.createSpeechText(MESSAGE.askPostalCodeRest.reprompt),
+          );
+        } else if (sessionAttributes.STATE === STATE.ASK_TEMPERATURE) {
+          responseHelper.setSimpleSpeech(
+            Clova.SpeechBuilder.createSpeechText(MESSAGE.help.input),
+          ).setReprompt(
+            Clova.SpeechBuilder.createSpeechText(MESSAGE.help.reprompt),
+          );
+        } else {
+          responseHelper.setSimpleSpeech(
+            Clova.SpeechBuilder.createSpeechText(MESSAGE.help.login),
+          ).endSession();
+        }
         break;
       case 'InputIntent':
         await inputTemperature(responseHelper);
         break;
       case 'PostalCodeIntent':
-        if (sessionAttributes.STATE === STATE.ASK_POSTALCODE) {
+        console.log("postalcodeintent", JSON.stringify(sessionAttributes, null, 2));
+        if (sessionAttributes.STATE === STATE.ASK_POSTALCODE_FIRST) {
           await inputPostalCode(responseHelper);
+        } else if (sessionAttributes.STATE === STATE.ASK_POSTALCODE_REST) {
+          // はじめの三桁ではなく四桁をようきゅうする
+          responseHelper.setSimpleSpeech(
+            Clova.SpeechBuilder.createSpeechText(MESSAGE.error.restPostalCode),
+          ).setReprompt(
+            Clova.SpeechBuilder.createSpeechText(MESSAGE.error.restPostalCode),
+          );
+        } else {
+          responseHelper.setSimpleSpeech(
+            Clova.SpeechBuilder.createSpeechText(MESSAGE.error.speak),
+          ).setReprompt(
+            Clova.SpeechBuilder.createSpeechText(MESSAGE.error.reprompt),
+          );
+        }
+        break;
+      case 'PostalCodeRestIntent':
+        console.log("postalcoderestintent", JSON.stringify(sessionAttributes, null, 2));
+        if (sessionAttributes.STATE === STATE.ASK_POSTALCODE_REST) {
+          await inputPostalCodeRest(responseHelper);
+        } else if (sessionAttributes.STATE === STATE.ASK_POSTALCODE_FIRST) {
+          // 4桁ではなく3桁をようきゅうする
+          responseHelper.setSimpleSpeech(
+            Clova.SpeechBuilder.createSpeechText(MESSAGE.error.firstPostalCode),
+          ).setReprompt(
+            Clova.SpeechBuilder.createSpeechText(MESSAGE.error.firstPostalCode),
+          );
         } else {
           responseHelper.setSimpleSpeech(
             Clova.SpeechBuilder.createSpeechText(MESSAGE.error.speak),
@@ -503,6 +593,5 @@ const clovaSkillHandler = Clova.Client
     }
   })
   .onSessionEndedRequest((responseHelper: Clova.Context) => {
-    const sessionId = responseHelper.getSessionId();
     // Do something on session end
   });
