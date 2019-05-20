@@ -241,12 +241,13 @@ const createGoalResponse = async (responseHelper: Clova.Context,
   };
 
   if (image) {
+    const originalContentUrl = `${process.env.S3_PATH}/${process.env.RESIZED_BUCKET_NAME}/${image}`;
+    const previewImageUrl = `${process.env.S3_PATH}/${process.env.RESIZED_BUCKET_NAME}/preview_${image}`;
+
     messages.push({
       type: 'image',
-      // originalContentUrl: `${process.env.S3_PATH}/${item.image}`,
-      // previewImageUrl: "https://example.com/preview.jpg",
-      originalContentUrl: `${process.env.S3_PATH}/sample.jpg`,
-      previewImageUrl: `${process.env.S3_PATH}/sample-preview.jpg`,
+      originalContentUrl,
+      previewImageUrl,
     });
     speak = util.format(messageFormat, temperature, result, MESSAGE.image.exist);
     messages.push({
